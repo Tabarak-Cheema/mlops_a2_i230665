@@ -1,0 +1,35 @@
+{
+  "repository": "https://github.com/tiangolo/fastapi",
+  "violations": [
+    {
+      "rule_id": "DEP-001",
+      "category": "dependency_management",
+      "severity": "medium",
+      "file": "requirements.txt",
+      "line": null,
+      "description": "Development and production dependencies are not separated",
+      "evidence": "requirements.txt contains both runtime and development packages (pytest, httpx) without a separate requirements-dev.txt or dev extras in pyproject.toml",
+      "recommendation": "Separate runtime dependencies from development dependencies using requirements-dev.txt or [project.optional-dependencies] in pyproject.toml"
+    },
+    {
+      "rule_id": "CI-001",
+      "category": "ci_cd",
+      "severity": "low",
+      "file": ".github/workflows/test.yml",
+      "line": null,
+      "description": "CI workflow does not pin action versions to a commit SHA",
+      "evidence": "actions/checkout@v4 and actions/setup-python@v5 use mutable version tags rather than immutable commit SHAs, which can introduce supply-chain risk",
+      "recommendation": "Pin third-party GitHub Actions to a specific commit SHA (e.g., actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683)"
+    },
+    {
+      "rule_id": "HYG-001",
+      "category": "repository_hygiene",
+      "severity": "low",
+      "file": ".gitignore",
+      "line": null,
+      "description": ".gitignore does not exclude common IDE configuration directories",
+      "evidence": ".gitignore is present but missing entries for .idea/ (JetBrains) and .vscode/ (VS Code)",
+      "recommendation": "Add .idea/ and .vscode/ (or .vscode/settings.json) to .gitignore to avoid committing IDE-specific files"
+    }
+  ]
+}
