@@ -1,55 +1,115 @@
 # DevOps Repository Auditing Agent
 
-An AI-powered DevOps auditing agent that autonomously inspects GitHub repositories, identifies DevOps best-practice violations, and generates an evidence-based JSON report with actionable recommendations.
+Course: MLOps & Production AI Engineering  
+Language: Python 3.10+  
+CLI Entry Point: `agent.py`
 
-## Architecture
-
-```
-agent.py          ← CLI entry point & agent loop (Observe → Reason → Act)
-tools.py          ← Inspection tool implementations
-llm_client.py     ← LLM provider abstraction (Gemini / OpenAI / Anthropic)
-tests/            ← Automated tests for tools and agent behaviour
-```
-
-### Agent Loop
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│                        Agent Loop                            │
-│                                                              │
-│  Clone Repo → [Observe → LLM Reason → Select Tool →         │
-│                Execute Tool → Interpret Results] × N         │
-│                          → Finish → Write Report             │
-└──────────────────────────────────────────────────────────────┘
-```
-
-The LLM **dynamically selects** which inspection tool to call next based on previous observations. There is no fixed checklist – the model reasons about what to inspect and follows up with additional tool calls as needed.
-
-### Available Tools
-
-| Tool | Purpose |
-|------|---------|
-| `list_files()` | Discover repository files and structure |
-| `read_file(path)` | Inspect source or configuration files |
-| `search_code(pattern)` | Search for suspicious patterns via regex |
-| `git_log()` | Inspect commit history |
-| `git_status()` | Detect tracked generated files |
-| `list_github_actions()` | Enumerate CI/CD workflow files |
-| `run_ruff()` | Run the ruff linter (if available) |
-| `check_gitignore()` | Inspect .gitignore configuration |
-| `check_dockerfile()` | Find and analyse Dockerfiles |
-| `check_docker_compose()` | Find and analyse docker-compose files |
-| `check_pr_template()` | Check for PR templates, CODEOWNERS, CONTRIBUTING |
-
-### Supported LLM Providers
-
-- **Google Gemini** (default) – set `GEMINI_API_KEY`
-- **OpenAI / compatible endpoint** – set `OPENAI_API_KEY`
-- **Anthropic Claude** – set `ANTHROPIC_API_KEY`
+An autonomous, AI-powered DevOps repository auditing agent that inspects GitHub repositories, identifies genuine DevOps best-practice violations, and generates an evidence-based, machine-readable JSON report with actionable recommendations.
 
 ---
 
-## Installation
+## 1. Objective and Architecture
+
+The agent executes an autonomous, iterative cycle:
+$$\text{Observe} \longrightarrow \text{Reason} \longrightarrow \text{Select Tool} \longrightarrow \text{Execute Tool} \longrightarrow \text{Interpret Results} \longrightarrow \text{Report}$$
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                               Agent Loop                                │
+│                                                                         │
+│  Clone Target Repo (Temp Isolation)                                     │
+│         │                                                               │
+│         ▼                                                               │
+│    ┌─────────┐      Observation      ┌─────────────────┐                │
+│    │ Tools   │ ────────────────────> │ LLM Reasoner    │                │
+│    │ Dispatch│ <──────────────────── │ (Tool Selection)│                │
+│    └─────────┘       Action (Call)   └─────────────────┘                │
+│         │                                     │                         │
+│         │ (Iterative investigation)          │ Emit "finish" action     │
+│         ▼                                     ▼                         │
+│   All tools executed                   Synthesize Evidence &            │
+│   strictly read-only                   Generate Report JSON             │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Framework Restriction Compliance
+Per Section 3 of the assignment guidelines:
+- **No prebuilt agent frameworks or orchestration libraries are used** (e.g. LangChain, LangGraph, CrewAI, AutoGen, or n8n are strictly avoided).
+- The agent reasoning, multi-turn tool dispatch, observation passing, exponential backoff retries, and control flow are implemented purely from scratch in Python.
+- Direct provider SDKs are supported for LLM inference (`google-generativeai`, `openai`, and `anthropic`).
+
+---
+
+## 2. Repository Layout
+
+```
+mlops_a2_i230665/
+├── agent.py               # CLI entry point, Observe-Reason-Act loop, tool dispatch
+├── tools.py               # Inspection tools (read-only filesystem, git, code analysis)
+├── llm_client.py          # Unified LLM provider abstraction (Gemini / OpenAI / Claude)
+├── requirements.txt       # Installable project dependencies
+├── .env.example           # Template for required environment variables
+├── .gitignore             # Standard Python/DevOps ignore configurations
+├── README.md              # Complete project documentation & execution guide
+├── sample_report.json     # Authentic example report generated by the agent
+└── tests/
+    ├── __init__.py
+    ├── test_agent.py      # Unit and contract tests for agent logic & JSON schema
+    └── test_tools.py      # Automated tests for tool execution & edge cases
+```
+
+---
+
+## 3. Inspection Tools (`tools.py`)
+
+All tools operate strictly read-only and will never alter the target repository.
+
+| Tool | Description |
+|------|-------------|
+| `list_files(repo_path, max_depth=6)` | Discovers file layout and directory structure up to 6 levels deep. |
+| `read_file(repo_path, relative_path, max_bytes=32768)` | Inspects configuration, source, or workflow files safely. |
+| `search_code(repo_path, pattern, file_glob="*")` | Searches for suspicious patterns, sensitive tokens, or bad practices via regex. |
+| `git_log(repo_path, max_entries=50)` | Inspects recent commit history and messages. |
+| `git_status(repo_path)` | Checks for tracked temporary, generated, or untracked local files. |
+| `list_github_actions(repo_path)` | Enumerates workflow definitions under `.github/workflows/`. |
+| `check_gitignore(repo_path)` | Analyzes `.gitignore` coverage and detects absent/unsuitable ignore rules. |
+| `check_dockerfile(repo_path)` | Finds and analyzes Dockerfile configuration. |
+| `check_docker_compose(repo_path)` | Discovers compose definitions to evaluate local setup separation. |
+| `check_pr_template(repo_path)` | Checks for PR templates, `CODEOWNERS`, and `CONTRIBUTING` documentation. |
+| `run_ruff(repo_path)` | Executes `ruff` linter (if present) to detect Python code quality issues. |
+| `run_pytest(repo_path)` | Runs test suite safely to determine whether repository tests pass. |
+
+---
+
+## 4. DevOps Inspection Scope
+
+The agent evaluates 9 key DevOps domains:
+
+1. **Repository Hygiene**: Missing README, unsuitable or absent `.gitignore`, tracked build/cache artifacts or secrets.
+2. **Dependency Management**: Missing lockfiles, unpinned package versions, inconsistent dependency specifications.
+3. **Code Quality**: Missing linting/formatting configuration, obvious maintainability hazards.
+4. **Testing**: Absent automated tests, test failures, or absence of CI test runners.
+5. **GitHub Actions / CI**: Unsafe trigger rules, ineffective gates, skipped validation steps, mutable action tags.
+6. **Security**: Hardcoded API keys, exposed database passwords, overly permissive tokens, unsafe workflow permissions. *(Evidence never echoes secret values)*.
+7. **Configuration**: Machine-specific absolute paths (`/home/...`, `C:\...`), committed `.env` files, poor separation of environment settings.
+8. **Collaboration**: Missing pull request templates, missing code ownership (`CODEOWNERS`), absence of review guidelines.
+9. **Build and Release**: Missing build validation, absent automated packaging, or unsafe deployment scripts.
+
+*Evidence Rule*: Equivalent acceptable alternatives (e.g. `pyproject.toml` instead of `requirements.txt`) are not penalized. Remote branch protection settings are not inferred without evidence.
+
+---
+
+## 5. Prerequisites and Installation
+
+### Requirements
+- Python 3.10 or higher
+- Git installed and available in system `PATH`
+- API key for one supported LLM provider:
+  - **Google Gemini** (recommended default)
+  - **OpenAI** (or OpenAI-compatible endpoint)
+  - **Anthropic Claude**
+
+### Step-by-Step Installation
 
 ```bash
 # 1. Clone this repository
@@ -58,76 +118,91 @@ cd mlops_a2_i230665
 
 # 2. Create and activate a virtual environment
 python -m venv .venv
-# Windows
-.venv\Scripts\activate
-# macOS / Linux
+
+# On Linux / macOS:
 source .venv/bin/activate
+# On Windows (cmd / PowerShell):
+.venv\Scripts\activate
 
 # 3. Install dependencies
 pip install -r requirements.txt
 
-# 4. Configure credentials
+# 4. Configure environment credentials
 cp .env.example .env
-# Edit .env and add your API key
 ```
 
 ---
 
-## Configuration
+## 6. Environment Configuration
 
-Copy `.env.example` to `.env` and set at least one LLM API key:
+Edit the created `.env` file to provide your API key.
 
+### Option A: Google Gemini (Default)
 ```env
-LLM_PROVIDER=gemini          # gemini | openai | anthropic
-GEMINI_API_KEY=your-key-here
+LLM_PROVIDER=gemini
+GEMINI_API_KEY=your-gemini-api-key-here
+# Optional model override:
+# LLM_MODEL=gemini-2.0-flash
 ```
 
-Optional overrides:
-
+### Option B: OpenAI / Compatible
 ```env
-LLM_MODEL=gemini-2.0-flash   # override the default model
-OPENAI_BASE_URL=https://...  # use an OpenAI-compatible endpoint
+LLM_PROVIDER=openai
+OPENAI_API_KEY=your-openai-api-key-here
+# Optional model / endpoint override:
+# LLM_MODEL=gpt-4o-mini
+# OPENAI_BASE_URL=https://api.openai.com/v1
+```
+
+### Option C: Anthropic Claude
+```env
+LLM_PROVIDER=anthropic
+ANTHROPIC_API_KEY=your-anthropic-api-key-here
+# Optional model override:
+# LLM_MODEL=claude-3-5-haiku-20241022
 ```
 
 ---
 
-## Usage
+## 7. Execution Interface
+
+The agent runs unattended without interactive prompts.
+
+### Command Syntax
 
 ```bash
-python agent.py --repo <github_repository_url> --output report.json
+python agent.py --repo <github_repository_url> --output <output_json_path>
 ```
 
 ### Examples
 
 ```bash
-# Audit a public repository (default Gemini provider)
+# Standard unattended audit
 python agent.py --repo https://github.com/example/demo-project --output report.json
 
-# Use OpenAI instead
-python agent.py --repo https://github.com/example/demo-project --output report.json \
-  --provider openai --model gpt-4o-mini
+# Audit using OpenAI provider and custom model
+python agent.py --repo https://github.com/example/demo-project --output report.json --provider openai --model gpt-4o-mini
 
-# Keep the cloned repo for debugging
-python agent.py --repo https://github.com/example/demo-project --output report.json \
-  --keep-clone --verbose
+# Audit with debug logging enabled and preserve clone directory for analysis
+python agent.py --repo https://github.com/example/demo-project --output report.json --verbose --keep-clone
 ```
 
-### CLI Options
+### Command-Line Arguments
 
-| Flag | Description |
-|------|-------------|
-| `--repo URL` | **Required.** Public GitHub repository URL |
-| `--output FILE` | Output JSON path (default: `report.json`) |
-| `--provider NAME` | LLM provider: `gemini`, `openai`, `anthropic` |
-| `--model NAME` | LLM model name override |
-| `--keep-clone` | Keep the cloned repo after the run |
-| `--verbose` | Enable DEBUG logging |
+| Argument | Description | Default |
+|---|---|---|
+| `--repo URL` | **Required.** Public GitHub repository URL to audit. | *None* |
+| `--output FILE` | Path where the resulting JSON report will be saved. | `report.json` |
+| `--provider NAME` | LLM provider override (`gemini`, `openai`, `anthropic`). | Value from `.env` or `gemini` |
+| `--model NAME` | LLM model identifier override. | Provider default |
+| `--keep-clone` | Prevent automatic removal of the temporary cloned repository. | `False` |
+| `--verbose` | Enable verbose DEBUG logging output. | `False` |
 
 ---
 
-## Output Format
+## 8. Output Specification
 
-The agent writes a JSON file conforming to this schema:
+On completed inspection, the agent writes a JSON report strictly formatted to the course specification. Inapplicable `file` or `line` values use JSON `null`. Sensitive secret values are never reproduced.
 
 ```json
 {
@@ -147,51 +222,29 @@ The agent writes a JSON file conforming to this schema:
 }
 ```
 
-**Severity levels:** `critical` · `high` · `medium` · `low`  
-**File / line:** `null` when not applicable
+- **Severity Scale**: `critical`, `high`, `medium`, `low`.
+- If no violations are detected, `"violations": []` is produced.
+- On fatal errors (e.g. invalid repository URL, clone failure, unrecoverable API error), the script terminates with a non-zero exit code and an informative error message.
 
 ---
 
-## Running Tests
+## 9. Automated Testing
+
+The repository contains 51 automated unit and integration tests covering tool functionality, error handling, dispatch logic, and JSON schema compliance.
 
 ```bash
 # Run all tests
 pytest tests/ -v
 
-# Run with coverage report
+# Run tests with coverage summary
 pytest tests/ -v --cov=. --cov-report=term-missing
-
-# Run a specific test file
-pytest tests/test_tools.py -v
 ```
 
 ---
 
-## Inspection Areas
+## 10. Constraints and Safety Guarantees
 
-| Category | Examples |
-|----------|---------|
-| `repository_hygiene` | Missing README, bad .gitignore, tracked generated files |
-| `dependency_management` | Missing lockfiles, unpinned versions, inconsistent specs |
-| `code_quality` | No linting config, obvious maintainability issues |
-| `testing` | No tests, failing tests, no CI test gate |
-| `ci_cd` | Wrong triggers, ineffective gates, skipped validation |
-| `security` | Exposed credentials, unsafe workflow permissions |
-| `configuration` | Hardcoded paths, committed local settings |
-| `collaboration` | Unsafe PR automation, missing review guidance |
-| `build_release` | Missing build validation, risky deploy automation |
-
----
-
-## Design Decisions
-
-- **No orchestration frameworks** – The agent loop, tool dispatch, and LLM reasoning are implemented from scratch in Python as required by the assignment.
-- **Read-only** – The agent never modifies the inspected repository. It clones to a temporary directory and discards it after the run.
-- **Evidence-first** – Every violation is backed by literal evidence from tool outputs. The agent is instructed not to invent findings.
-- **Multi-provider** – Supports Gemini, OpenAI, and Anthropic so the evaluator can use any available API key.
-
----
-
-## Sample Report
-
-See [`sample_report.json`](sample_report.json) for an example agent output on a real repository.
+- **Non-Destructive**: Target repositories are cloned into isolated temporary folders and deleted after inspection (unless `--keep-clone` is passed).
+- **Public Repositories**: Works with standard public GitHub URLs (`https://github.com/<owner>/<repo>`).
+- **Resilience**: Features exponential backoff retries for LLM rate limits and network errors.
+- **Defensibility**: Employs evidence-first agent prompts to maximize precision and eliminate hallucinated violations.
